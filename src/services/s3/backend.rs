@@ -706,7 +706,7 @@ impl S3Builder {
         let url = format!("{endpoint}/{bucket}");
         debug!("backend detect region with url: {url}");
 
-        let req = http::Request::head(&url).body(Body::Empty).map_err(|e| {
+        let req = Request::head(&url).body(Body::Empty).map_err(|e| {
             error!("backend detect_region {}: {:?}", url, e);
             Error::new(ErrorKind::Unexpected, "build request for head")
                 .with_context("service", Scheme::S3)

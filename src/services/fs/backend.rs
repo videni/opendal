@@ -290,7 +290,7 @@ impl FsBackend {
 
 #[async_trait]
 impl Accessor for FsBackend {
-    type Reader = output::into_reader::FdReader<Compat<tokio::fs::File>>;
+    type Reader = output::into_reader::FdReader<Compat<fs::File>>;
     type BlockingReader = output::into_blocking_reader::FdReader<std::fs::File>;
     type Pager = Option<DirPager>;
     type BlockingPager = Option<BlockingDirPager>;
@@ -464,7 +464,7 @@ impl Accessor for FsBackend {
     async fn stat(&self, path: &str, _: OpStat) -> Result<RpStat> {
         let p = self.root.join(path.trim_end_matches('/'));
 
-        let meta = tokio::fs::metadata(&p).await.map_err(parse_io_error)?;
+        let meta = fs::metadata(&p).await.map_err(parse_io_error)?;
 
         if self.enable_path_check && meta.is_dir() != path.ends_with('/') {
             return Err(Error::new(
@@ -494,7 +494,7 @@ impl Accessor for FsBackend {
     async fn delete(&self, path: &str, _: OpDelete) -> Result<RpDelete> {
         let p = self.root.join(path.trim_end_matches('/'));
 
-        let meta = tokio::fs::metadata(&p).await;
+        let meta = fs::metadata(&p).await;
 
         match meta {
             Ok(meta) => {
@@ -506,7 +506,7 @@ impl Accessor for FsBackend {
 
                 Ok(RpDelete::default())
             }
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(RpDelete::default()),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(RpDelete::default()),
             Err(err) => Err(parse_io_error(err)),
         }
     }
@@ -514,7 +514,7 @@ impl Accessor for FsBackend {
     async fn list(&self, path: &str, args: OpList) -> Result<(RpList, Self::Pager)> {
         let p = self.root.join(path.trim_end_matches('/'));
 
-        let f = match tokio::fs::read_dir(&p).await {
+        let f = match fs::read_dir(&p).await {
             Ok(rd) => rd,
             Err(e) => {
                 return if e.kind() == io::ErrorKind::NotFound {
@@ -645,7 +645,7 @@ impl Accessor for FsBackend {
                     .open(&temp_path)
                     .map_err(parse_io_error)?;
 
-                std::io::copy(&mut r, &mut f).map_err(parse_io_error)?
+                io::copy(&mut r, &mut f).map_err(parse_io_error)?
             };
             std::fs::rename(&temp_path, target_path).map_err(parse_io_error)?;
 
@@ -659,7 +659,7 @@ impl Accessor for FsBackend {
                 .open(p)
                 .map_err(parse_io_error)?;
 
-            let size = std::io::copy(&mut r, &mut f).map_err(parse_io_error)?;
+            let size = io::copy(&mut r, &mut f).map_err(parse_io_error)?;
 
             Ok(RpWrite::new(size))
         }
@@ -710,7 +710,7 @@ impl Accessor for FsBackend {
 
                 Ok(RpDelete::default())
             }
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(RpDelete::default()),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(RpDelete::default()),
             Err(err) => Err(parse_io_error(err)),
         }
     }

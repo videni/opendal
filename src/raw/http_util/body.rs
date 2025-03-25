@@ -51,7 +51,7 @@ impl Body {
     /// Consume the entire body.
     pub fn consume(self) -> Result<()> {
         if let Body::Reader(mut r) = self {
-            std::io::copy(&mut r, &mut std::io::sink()).map_err(|err| {
+            io::copy(&mut r, &mut io::sink()).map_err(|err| {
                 Error::new(ErrorKind::Unexpected, "consuming response")
                     .with_operation("http_util::Body::consume")
                     .set_source(err)
