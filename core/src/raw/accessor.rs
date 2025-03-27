@@ -27,6 +27,8 @@ use futures::Future;
 use crate::raw::*;
 use crate::*;
 
+use super::oio::MultipartWrite;
+
 /// Underlying trait of all backends for implementers.
 ///
 /// The actual data access of storage service happens in Accessor layer.
@@ -378,6 +380,84 @@ pub trait Access: Send + Sync + Debug + Unpin + 'static {
         Err(Error::new(
             ErrorKind::Unsupported,
             "operation is not supported",
+        ))
+    }
+    /// Convert this accessor into a multipart access implementation.
+    ///
+    /// This operation allows converting an accessor into a multipart upload capable implementation
+    /// for handling large file uploads in chunks. Returns `ErrorKind::Unsupported` by default
+    /// if the underlying storage service does not support multipart uploads.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path where the multipart upload will be initiated
+    /// * `op` - The write operation parameters
+    fn multipart_access(&self, _path: &str, _op: OpWrite) -> Result<impl MultipartAccess> {
+        Err::<(), _>(Error::new(
+            ErrorKind::Unsupported,
+            "Operation is not supported",
+        ))
+    }
+}
+
+/// Trait for handling multipart upload operations.
+///
+/// This trait provides the necessary interface for managing multipart uploads,
+/// which are typically used for uploading large files in chunks.
+/// Implementations should handle the initiation, writing, completion, and
+/// aborting of multipart uploads.
+pub trait MultipartAccess: oio::MultipartWrite {
+    // fn list_parts(&self, upload_id: String) -> Vec<String>;
+}
+
+impl MultipartAccess for () {
+    // fn list_parts(&self, _upload_id: String) -> Vec<String> {
+    //     vec![]
+    // }
+}
+impl oio::MultipartWrite for () {
+    async fn write_once(&self, size: u64, body: Buffer) -> Result<Metadata> {
+        Err(Error::new(
+            ErrorKind::Unsupported,
+            "Operation is not supported",
+        ))
+    }
+
+    async fn initiate_part(&self) -> Result<String> {
+        Err(Error::new(
+            ErrorKind::Unsupported,
+            "Operation is not supported",
+        ))
+    }
+
+    async fn write_part(
+        &self,
+        upload_id: &str,
+        part_number: usize,
+        size: u64,
+        body: Buffer,
+    ) -> Result<oio::MultipartPart> {
+        Err(Error::new(
+            ErrorKind::Unsupported,
+            "Operation is not supported",
+        ))
+    }
+
+    async fn complete_part(
+        &self,
+        upload_id: &str,
+        parts: &[oio::MultipartPart],
+    ) -> Result<Metadata> {
+        Err(Error::new(
+            ErrorKind::Unsupported,
+            "Operation is not supported",
+        ))
+    }
+
+    async fn abort_part(&self, upload_id: &str) -> Result<()> {
+        Err(Error::new(
+            ErrorKind::Unsupported,
+            "Operation is not supported",
         ))
     }
 }

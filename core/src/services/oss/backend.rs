@@ -650,4 +650,65 @@ impl Access for OssBackend {
             parts.headers,
         )))
     }
+
+    fn multipart_access(&self, path: &str, op: OpWrite) -> Result<impl MultipartAccess> {
+        let core = self.core.clone();
+
+        Ok(OssMultipartAccessor::new(core, path, op))
+    }
+}
+
+pub struct OssMultipartAccessor {
+    core: Arc<OssCore>,
+    oss_writer: OssWriter
+}
+
+impl OssMultipartAccessor {
+    pub fn new(core: Arc<OssCore>,  path: &str, op: OpWrite) -> Self {
+        let oss_writer = OssWriter::new(core.clone(), path, op.clone());
+
+        OssMultipartAccessor {
+            core,
+            oss_writer
+        }
+    }
+}
+
+impl oio::MultipartWrite for OssMultipartAccessor {
+    async fn write_once(&self, size: u64, body: Buffer) -> Result<Metadata> {
+        self.oss_writer.write_once(size, body).await
+    }
+
+    async fn initiate_part(&self) -> Result<String> {
+       self.oss_writer.initiate_part().await
+    }
+
+    async fn write_part(
+        &self,
+        upload_id: &str,
+        part_number: usize,
+        size: u64,
+        body: Buffer,
+    ) -> Result<oio::MultipartPart> {
+        self.oss_writer.write_part(upload_id,
+            part_number,
+            size,
+            body).await
+    }
+
+    async fn complete_part(
+        &self,
+        upload_id: &str,
+        parts: &[oio::MultipartPart],
+    ) -> Result<Metadata> {
+        self.oss_writer.complete_part(upload_id, parts).await
+    }
+
+    async fn abort_part(&self, upload_id: &str) -> Result<()> {
+        self.oss_writer.abort_part(upload_id).await
+    }
+}
+
+impl MultipartAccess for OssMultipartAccessor {
+
 }
