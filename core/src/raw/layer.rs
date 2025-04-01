@@ -237,6 +237,11 @@ pub trait LayeredAccess: Send + Sync + Debug + Unpin + 'static {
     fn blocking_delete(&self) -> Result<(RpDelete, Self::BlockingDeleter)>;
 
     fn blocking_list(&self, path: &str, args: OpList) -> Result<(RpList, Self::BlockingLister)>;
+
+    fn multipart_access(&self, path: &str, op: OpWrite) -> Result<Box<dyn MultipartAccessDyn>>
+    {
+        self.inner().multipart_access(path, op)
+    }
 }
 
 impl<L: LayeredAccess> Access for L {
@@ -320,6 +325,10 @@ impl<L: LayeredAccess> Access for L {
 
     fn blocking_list(&self, path: &str, args: OpList) -> Result<(RpList, Self::BlockingLister)> {
         LayeredAccess::blocking_list(self, path, args)
+    }
+
+    fn multipart_access(&self, path: &str, op: OpWrite) -> Result<Box<dyn MultipartAccessDyn>> {
+        LayeredAccess::multipart_access(self, path, op)
     }
 }
 

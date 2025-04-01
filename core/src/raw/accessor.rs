@@ -392,11 +392,14 @@ pub trait Access: Send + Sync + Debug + Unpin + 'static {
     ///
     /// * `path` - The path where the multipart upload will be initiated
     /// * `op` - The write operation parameters
-    fn multipart_access(&self, _path: &str, _op: OpWrite) -> Result<impl MultipartAccess> {
-        Err::<(), _>(Error::new(
+    fn multipart_access(&self, _path: &str, _op: OpWrite) -> Result<Box<dyn MultipartAccessDyn>> {
+        Err(Error::new(
             ErrorKind::Unsupported,
-            "Operation is not supported",
+            "multipart_access not implemented",
         ))
+    }
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
     }
 }
 
@@ -409,6 +412,29 @@ pub trait Access: Send + Sync + Debug + Unpin + 'static {
 pub trait MultipartAccess: oio::MultipartWrite {
     // fn list_parts(&self, upload_id: String) -> Vec<String>;
 }
+
+pub trait MultipartAccessDyn: Send + Sync {
+    fn write_once_dyn(&self, size: u64, body: Buffer) -> BoxedFuture<Result<Metadata>>;
+    fn initiate_part_dyn(&self) -> BoxedFuture<Result<String>>;
+    fn write_part_dyn<'a>(
+        &'a self,
+        upload_id: &'a str,
+        part_number: usize,
+        size: u64,
+        body: Buffer,
+    ) -> BoxedFuture<Result<oio::MultipartPart>>;
+    fn complete_part_dyn<'a>(
+        &'a self,
+        upload_id: &'a str,
+        parts: &'a [oio::MultipartPart],
+    ) -> BoxedFuture<Result<Metadata>>;
+    fn abort_part_dyn<'a>(&'a self, upload_id: &'a str) -> BoxedFuture<Result<()>>;
+
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
+}
+
 
 impl MultipartAccess for () {
     // fn list_parts(&self, _upload_id: String) -> Vec<String> {
@@ -459,6 +485,38 @@ impl oio::MultipartWrite for () {
             ErrorKind::Unsupported,
             "Operation is not supported",
         ))
+    }
+}
+
+impl<T: MultipartAccess> MultipartAccessDyn for T {
+    fn write_once_dyn(&self, size: u64, body: Buffer) -> BoxedFuture<Result<Metadata>> {
+        Box::pin(self.write_once(size, body))
+    }
+
+    fn initiate_part_dyn(&self) -> BoxedFuture<Result<String>> {
+        Box::pin(self.initiate_part())
+    }
+
+    fn write_part_dyn<'a>(
+        &'a self,
+        upload_id: &'a str,
+        part_number: usize,
+        size: u64,
+        body: Buffer,
+    ) -> BoxedFuture<Result<oio::MultipartPart>> {
+        Box::pin(self.write_part(upload_id, part_number, size, body))
+    }
+
+    fn complete_part_dyn<'a >(
+        &'a self,
+        upload_id: &'a str,
+        parts: &'a [oio::MultipartPart],
+    ) -> BoxedFuture<Result<Metadata>> {
+        Box::pin(self.complete_part(upload_id, parts))
+    }
+
+    fn abort_part_dyn<'a>(&'a self, upload_id: &'a str) -> BoxedFuture<Result<()>> {
+        Box::pin(self.abort_part(upload_id))
     }
 }
 
@@ -535,6 +593,8 @@ pub trait AccessDyn: Send + Sync + Debug + Unpin {
     fn blocking_copy_dyn(&self, from: &str, to: &str, args: OpCopy) -> Result<RpCopy>;
     /// Dyn version of [`Accessor::blocking_rename`]
     fn blocking_rename_dyn(&self, from: &str, to: &str, args: OpRename) -> Result<RpRename>;
+
+    fn multipart_access_dyn<'a>(&'a self, path: &'a str, op: OpWrite) -> Result<Box<dyn MultipartAccessDyn>>;
 }
 
 impl<A: ?Sized> AccessDyn for A
@@ -655,6 +715,13 @@ where
     fn blocking_rename_dyn(&self, from: &str, to: &str, args: OpRename) -> Result<RpRename> {
         self.blocking_rename(from, to, args)
     }
+
+    fn multipart_access_dyn<'a>(&'a self, path: &'a str, op: OpWrite) -> Result<Box<dyn MultipartAccessDyn>> {
+        match self.multipart_access(path, op) {
+            Ok(access) => Ok(access as Box<dyn MultipartAccessDyn>),
+            Err(e) => Err(e),
+        }
+    }
 }
 
 impl Access for dyn AccessDyn {
@@ -737,6 +804,10 @@ impl Access for dyn AccessDyn {
 
     fn blocking_rename(&self, from: &str, to: &str, args: OpRename) -> Result<RpRename> {
         self.blocking_rename_dyn(from, to, args)
+    }
+
+    fn multipart_access(&self, path: &str, op: OpWrite) -> Result<Box<dyn MultipartAccessDyn>> {
+        self.multipart_access_dyn(path, op)
     }
 }
 
@@ -876,6 +947,10 @@ impl<T: Access + ?Sized> Access for Arc<T> {
 
     fn blocking_rename(&self, from: &str, to: &str, args: OpRename) -> Result<RpRename> {
         self.as_ref().blocking_rename(from, to, args)
+    }
+
+    fn multipart_access(&self, path: &str, op: OpWrite) -> Result<Box<dyn MultipartAccessDyn>> {
+        self.as_ref().multipart_access(path, op)
     }
 }
 

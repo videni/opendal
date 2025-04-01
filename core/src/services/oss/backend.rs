@@ -651,10 +651,9 @@ impl Access for OssBackend {
         )))
     }
 
-    fn multipart_access(&self, path: &str, op: OpWrite) -> Result<impl MultipartAccess> {
+    fn multipart_access(&self, path: &str, op: OpWrite) -> Result<Box<dyn MultipartAccessDyn>> {
         let core = self.core.clone();
-
-        Ok(OssMultipartAccessor::new(core, path, op))
+        Ok(Box::new(OssMultipartAccessor::new(core, path, op)) as Box<dyn MultipartAccessDyn>)
     }
 }
 
@@ -662,6 +661,7 @@ pub struct OssMultipartAccessor {
     core: Arc<OssCore>,
     oss_writer: OssWriter
 }
+
 
 impl OssMultipartAccessor {
     pub fn new(core: Arc<OssCore>,  path: &str, op: OpWrite) -> Self {
